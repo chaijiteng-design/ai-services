@@ -1,0 +1,14 @@
+from Project_customer.app.models.models import Base
+from Project_customer.common.event_loop import run_async
+
+from Project_customer.infrastructure.db import async_engine
+
+
+async def init_database() -> None:
+    async with async_engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
+        await connection.run_sync(Base.metadata.create_all)
+
+
+if __name__ == "__main__":
+    run_async(init_database())
