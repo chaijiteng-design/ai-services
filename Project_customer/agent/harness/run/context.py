@@ -2,8 +2,9 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from langchain.agents import AgentState
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-from openai.types.beta.threads import message_content
+from typing_extensions import NotRequired
 
 from Project_customer.app.schemas import AgentRunRequest
 from Project_customer.common.settings import get_settings
@@ -14,10 +15,8 @@ class AgentRuntimeContext:
     access_token: str
     trace_id: str
 
-
-def _build_current_messages(messages):
-    pass
-
+class AgentRuntimeState(AgentState):
+    active_skill_code :NotRequired[str]
 
 def build_messages(payload: AgentRunRequest) -> list[BaseMessage]:
     """
