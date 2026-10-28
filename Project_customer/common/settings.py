@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field("HS256", description="JWT 签名算法")
     ecommerce_base_url: str = Field("http://127.0.0.1:8001/api/v1", description="电商业务服务接口地址")
     ecommerce_timeout_seconds: float = Field(8.0, description="调用电商业务服务的 HTTP 超时秒数")
+    agent_max_attempts: int = Field(2, description="Agent 推理与护栏校验最大尝试次数")
 
     llm_provider: Literal["deepseek", "qwen"] = Field(
         "deepseek",

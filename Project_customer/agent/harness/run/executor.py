@@ -3,7 +3,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from langchain_core.callbacks import UsageMetadataCallbackHandler
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, SystemMessage
 from sqlalchemy.ext.asyncio import AsyncSession as AsyncSessions
 import logging
 
@@ -24,7 +24,7 @@ class AgentExecutor:
         self._settings = get_settings()
         self._session = session
         self._agent = agent
-        self._validator = Validator()
+        self._validator = Validator(session)
 
     async def start_run(self, payload: AgentRunRequest, access_token: str) -> dict[str, Any]:
         '''
@@ -99,19 +99,31 @@ class AgentExecutor:
 
         validated_result: dict[str, Any] = {}
         # 3、执行Agent推理
-        try:
-            state: dict[str, Any] = await self._agent.ainvoke(
-                {"messages": messages},
-                context = runtime_context,
-                config={"callbacks": [call_back]}
-            )
+        for attempt in range(self._settings.agent_max_attempts):
+            try:
+                state: dict[str, Any] = await self._agent.ainvoke(
+                    {"messages": messages},
+                    context = runtime_context,
+                    config={"callbacks": [call_back]}
+                )
 
-            validated_result = await self._validator.validate(state['structured_response'])
+                validated_result:dict[str,Any] = await self._validator.validate(
+                    state['structured_response'],
+                    state['active_skill_code'],
+                    runtime_context.trace_id
+                )
+                break
 
-        # 4、推理期间出错（重试）
-        except ValidateOutputError as exc:
-            # TODO :后续接入自定义的异常，让模型重试修复
-            pass
+            # 4、推理期间出错（重试）
+            except ValidateOutputError as exc:
+                if attempt == self._settings.agent_max_attempts - 1:
+                    raise
+                messages = [
+                    *state["messages"],
+                    SystemMessage(
+                        content=f"上一次回复未通过校验：{exc}，请修正后重新回复。"
+                    ),
+                ]
 
         # 5、构建输入输出token的用量
         input_tokens, output_tokens = self._summarize_tokens(call_back)

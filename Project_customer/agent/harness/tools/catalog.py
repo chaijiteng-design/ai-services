@@ -41,7 +41,7 @@ class ToolCatalog:
 
 
 TOOL_CATALOG = ToolCatalog(
-    [
+    [ # type: ignore
         (search_products, ToolCategory.BUSINESS),
         (get_product, ToolCategory.BUSINESS),
         (list_orders, ToolCategory.BUSINESS),

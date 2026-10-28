@@ -31,7 +31,7 @@ class ActionDefinition:
         return {
             "label": self.label,
             "description": self.description,
-            "href": self.path_template.format(resource_id=resource_id)
+            "href": self.path_template.format(resource_id=resource_id or "")
         }
 
 
