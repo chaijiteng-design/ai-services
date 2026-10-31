@@ -8,7 +8,9 @@ from Project_customer.agent.harness.run.context import AgentRuntimeContext, Agen
 from Project_customer.common.utils import normalize_resource_id
 from Project_customer.infrastructure.client import EcommerceClient
 from Project_customer.agent.harness.tools.executor import tool_executor
+from Project_customer.app.services.knowledge import KnowledgeService
 
+knowledge_service = KnowledgeService()
 
 @tool
 async def search_products(
@@ -185,4 +187,22 @@ async def load_skill(
                 )
             ]
         }
+    )
+
+@tool
+async def search_knowledge(
+        query: Annotated[str, "需要查询的平台规则、服务政策或帮助说明"],
+        runtime: ToolRuntime[AgentRuntimeContext]
+) -> str:
+    """
+    查询平台知识内容。
+    用户询问售后规则、服务政策时调用。
+    该工具不用于查询订单、商品、库存、物流进度等实时业务数据。
+    """
+    return await tool_executor.execute_tool(
+        trace_id=runtime.context.trace_id,
+        tool_call_id=runtime.tool_call_id,
+        tool_name="search_knowledge",
+        tool_arguments={"query": query},
+        operation=lambda: knowledge_service.search()
     )

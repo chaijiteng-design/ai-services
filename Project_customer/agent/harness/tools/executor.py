@@ -5,9 +5,9 @@ from typing import Any, Callable, Awaitable
 
 from pydantic import BaseModel
 
-from app.models.enums import ToolResultCode
-from app.models.models import AgentToolCall
-from infrastructure.db import async_session_factory
+from Project_customer.app.models.enums import ToolResultCode
+from Project_customer.app.models.models import AgentToolCall
+from Project_customer.infrastructure.db import async_session_factory
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class ToolResult(BaseModel):
 
 class ToolExecutor:
 
-    async def execte_tool(self,
+    async def execute_tool(self,
                           trace_id: str,
                           tool_call_id: str,
                           tool_name: str,
@@ -91,6 +91,7 @@ class ToolExecutor:
                 tool_name=tool_name,
                 arguments=tool_arguments,
                 result=tool_result.model_dump(),
+                success=tool_result.success,
                 latency_ms=latency_ms
             )
             session.add(agent_tool_call)

@@ -5,9 +5,9 @@ from langgraph.pregel import _validate
 
 from Project_customer.agent.llm.output import PageAction
 from Project_customer.app.models.models import AgentToolCall
-from agent.harness.rules.action import ACTION_CATALOG, ActionCode
-from agent.harness.validator.validator import ValidateOutputError
-from common.utils import normalize_resource_id
+from Project_customer.agent.harness.rules.action import ACTION_CATALOG, ActionCode
+from Project_customer.agent.harness.validator.validator import ValidateOutputError
+
 
 
 
@@ -45,7 +45,7 @@ def validate_page_action(
         raise ValidateOutputError(f"{action_code} 必须提供订单编号")
 
     # 4、检验工具限制【校验订单状态是否是终态】
-    order_data = _validate_get_order(normalize_resource_id)
+    order_data = _validate_get_order(normalize_resource_id,tool_calls)
 
     # 5、检验状态限制【校验订单状态是否是终态】
     _validate_order_status(order_data['status'], action_code, normalize_resource_id)
@@ -53,9 +53,9 @@ def validate_page_action(
     # 6、构建其他五种行动的操作码
     return action_definition.build(resource_id=normalize_resource_id)
 
-def _validate_order_status(
-        tool_calls: list[AgentToolCall],
-        normalized_resource_id:str)-> dict[str, Any]:
+def _validate_get_order(
+        normalized_resource_id:str,
+        tool_calls: list[AgentToolCall])-> dict[str, Any]:
     '''
     职责：校验resource_id是否满足业务要求
     1、必须调用get_order工具
@@ -72,9 +72,13 @@ def _validate_order_status(
         ):
             return tool_call.result['data']
 
-def _validate_get_order(
+    raise ValidateOutputError(
+        f"页面动作引用的订单未经 get_order 工具确认：{normalized_resource_id}"
+    )
+
+def _validate_order_status(
+        order_status: str,
         action_code:str,
-        order_status:str,
         normalized_resource_id:str):
     '''
     职责：校验CANCEL_ORDER、EDIT_ADDRESS行动码是否是终态

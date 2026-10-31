@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from Project_customer.agent.agent import build_agent
 from Project_customer.app.routers import run
+from Project_customer.app.routers import admin
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ def lifespan(app: FastAPI):
 
 app = FastAPI(title="Ecommerce AI Service", lifespan=lifespan)
 app.include_router(run.router)
+app.include_router(admin.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

@@ -30,7 +30,7 @@ def get_model_client():
         return ChatDeepSeek(
             **model_kwargs,
             extra_body={
-                "thinking": {"typing": "disabled"}
+                "thinking": {"type": "disabled"}
             }
         )
 

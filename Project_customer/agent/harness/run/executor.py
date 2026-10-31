@@ -14,7 +14,6 @@ from Project_customer.app.schemas import AgentRunRequest
 from Project_customer.app.models.models import AgentTrace
 from Project_customer.common.settings import get_settings
 from Project_customer.agent.harness.run.context import AgentRuntimeContext, build_messages
-from agent.harness.validator import validator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -98,6 +97,7 @@ class AgentExecutor:
         call_back = UsageMetadataCallbackHandler()
 
         validated_result: dict[str, Any] = {}
+
         # 3、执行Agent推理
         for attempt in range(self._settings.agent_max_attempts):
             try:
@@ -109,7 +109,7 @@ class AgentExecutor:
 
                 validated_result:dict[str,Any] = await self._validator.validate(
                     state['structured_response'],
-                    state['active_skill_code'],
+                    state.get('active_skill_code'),
                     runtime_context.trace_id
                 )
                 break

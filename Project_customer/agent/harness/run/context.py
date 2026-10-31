@@ -31,9 +31,9 @@ def build_messages(payload: AgentRunRequest) -> list[BaseMessage]:
 
     # 2、标准化消息对象为langchain统一的消息对象
     messages = [
-        HumanMessage(content="")
+        HumanMessage(content=_format_message(message))
         if message["role"] == "USER" else
-        AIMessage(content="")
+        AIMessage(content=_format_message(message))
         for message in history_messages
     ]
     # 3、 构建当前轮次的消息
