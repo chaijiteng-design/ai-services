@@ -13,8 +13,6 @@ from Project_customer.agent.llm.output import AgentOutput
 from Project_customer.app.models.enums import ToolResultCode, ReplyType
 from Project_customer.app.models.models import AgentToolCall
 
-
-
 BUSINESS_FAILURE_MESSAGE = ("暂时无法查询到可靠的订单、商品、物流或售后信息，请您稍后重试，"
                             "或直接发送“转人工”由人工客服为您处理。")
 
@@ -24,6 +22,8 @@ class ValidateOutputError(ValueError):
 
 from Project_customer.agent.harness.validator.action import validate_page_action
 from Project_customer.agent.harness.validator.answer import validate_answer
+from Project_customer.agent.harness.validator.jev import check_output
+
 
 class Validator:
 
@@ -66,72 +66,47 @@ class Validator:
 
             # 2.3 过滤掉 搜索工具 （不需要进行回复答案以及页面行动校验）
             if tool_calls and not business_tool_calls:
-                return self._build_output(ReplyType.ANSWER, agent_output.text)
+                return build_output(ReplyType.ANSWER, agent_output.text)
 
             # 2.4 获取所有业务工具已经调用电商接口成功的
             complete_tool_calls = [cs_call for cs_call in business_tool_calls if cs_call.result['code'] != ToolResultCode.TOOL_CALL_FAILED]
 
             # 主动触发降级
             if business_tool_calls and not complete_tool_calls:
-                return self._build_output(ReplyType.ANSWER, text=BUSINESS_FAILURE_MESSAGE)
+                return build_output(ReplyType.ANSWER, text=BUSINESS_FAILURE_MESSAGE)
 
             # 没有调用skil【普通寒暄】 or 携带skil && 调用工具【校验】
-            # 2.4 校验answer
+            # 2.5 校验answer
             validate_answer(agent_output.text, complete_tool_calls)
 
-            # 2.5 校验page_action
+            # 2.6 Jev 语义护栏校验answer
+            await check_output(agent_output.text, complete_tool_calls)
+
+            # 2.7 校验page_action
             validated_page_action: dict[str, Any] = validate_page_action(agent_output.page_action, complete_tool_calls)
 
-            # 2.6 构建输出
-            return self._build_output(ReplyType.ANSWER,
+            # 2.8 构建输出
+            return build_output(ReplyType.ANSWER,
                                           agent_output.text,
                                           page_action=validated_page_action)
         # 3、校验回复类型是【转人工请求】REQUEST_HANDOFF
         if reply_type == ReplyType.REQUEST_HANDOFF:
             if agent_output.handoff_summary is None:
                 raise ValidateOutputError("请求转人工必须提供 handoff_summary")
-            return self._build_output(ReplyType.REQUEST_HANDOFF,
+            return build_output(ReplyType.REQUEST_HANDOFF,
                                       text = agent_output.text,
                                       handoff_summary=agent_output.handoff_summary
                                       )
         # 4、校验回复类型是【澄清】CLARIFY
         if reply_type == ReplyType.CLARIFY:
             choices = self._build_clarify_options(tool_calls)
-            return self._build_output(ReplyType.CLARIFY,
+            return build_output(ReplyType.CLARIFY,
                                       text = agent_output.text,
                                       choices = choices
                                       )
         # 5. 校验回复类型是【拒绝降级兜底】DECLINE
-        return self._build_output(ReplyType.DECLINE, text=BUSINESS_FAILURE_MESSAGE)
+        return build_output(ReplyType.DECLINE, text=BUSINESS_FAILURE_MESSAGE)
 
-
-    @staticmethod
-    def _build_output(reply_type: ReplyType,
-                      text,
-                      *,
-                      handoff_summary: str | None = None,
-                      page_action: dict[str, Any] | None = None,
-                      choices: list[dict[str, Any]] | None = None
-                      ) -> dict[str, Any]:
-        '''
-        职责：构建AI_Service最终返回给customer-service的结果结构
-        :param reply_type:
-        :param text:
-        :param handoff_summary:
-        :param page_action:
-        :param choice:
-        :return:
-        '''
-        return {
-            "reply_type": reply_type,
-            "text": text,
-            "handoff_summary": handoff_summary,
-            "page_action": page_action,
-            "choices": choices
-        }
-
-
-    @staticmethod
     def _build_clarify_options(tool_calls: list[AgentToolCall]) -> list[dict[str, Any]] | None:
         for call in tool_calls:
             if call.tool_name == "list_orders" and call.success:
@@ -145,3 +120,30 @@ class Validator:
                     for order in call.result['data'][:5]
                 ]
         return None
+
+def build_output(reply_type: ReplyType,
+                  text,
+                  *,
+                  handoff_summary: str | None = None,
+                  page_action: dict[str, Any] | None = None,
+                  choices: list[dict[str, Any]] | None = None
+                  ) -> dict[str, Any]:
+    '''
+    职责：构建AI_Service最终返回给customer-service的结果结构
+    :param reply_type:
+    :param text:
+    :param handoff_summary:
+    :param page_action:
+    :param choice:
+    :return:
+    '''
+    return {
+        "reply_type": reply_type,
+        "text": text,
+        "handoff_summary": handoff_summary,
+        "page_action": page_action,
+        "choices": choices
+    }
+
+
+

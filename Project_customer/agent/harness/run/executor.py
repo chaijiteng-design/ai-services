@@ -8,12 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession as AsyncSessions
 import logging
 
 
-from Project_customer.agent.harness.validator.validator import Validator, ValidateOutputError
-from Project_customer.app.models.enums import AgentTraceStatus
+from Project_customer.agent.harness.validator.validator import Validator, ValidateOutputError, build_output
+from Project_customer.app.models.enums import AgentTraceStatus, ReplyType
 from Project_customer.app.schemas import AgentRunRequest
 from Project_customer.app.models.models import AgentTrace
 from Project_customer.common.settings import get_settings
 from Project_customer.agent.harness.run.context import AgentRuntimeContext, build_messages
+from Project_customer.agent.harness.validator.jev import check_input
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -91,18 +92,27 @@ class AgentExecutor:
             如果指定了response_format,还可以获取到结构化的输出对象
             如果指定了state_schema，还可以获取到修改后的状态
         '''
+        # 0、Jev 前置检查：识别转人工、愤怒等情绪，并预选领域技能
+        need_handoff, skill_code, jev_input_tokens, jev_output_tokens = await check_input(payload.messages)
+        if need_handoff:
+            result = build_output(
+                ReplyType.REQUEST_HANDOFF,
+                text="已收到您的诉求，正在为您转接人工客服优先处理，请稍候。",
+                handoff_summary="用户要求转接人工客服或情绪较为焦急，请人工客服优先介入处理。",
+            )
+            return result, jev_input_tokens, jev_output_tokens
+
         # 1. 构建消息
-        messages: list[BaseMessage] =build_messages(payload)
+        messages: list[BaseMessage] =build_messages(payload, skill_code)
         # 2. 创建回调处理器
         call_back = UsageMetadataCallbackHandler()
-
         validated_result: dict[str, Any] = {}
 
         # 3、执行Agent推理
         for attempt in range(self._settings.agent_max_attempts):
             try:
                 state: dict[str, Any] = await self._agent.ainvoke(
-                    {"messages": messages},
+                    {"messages": messages, "active_skill_code": skill_code},
                     context = runtime_context,
                     config={"callbacks": [call_back]}
                 )
@@ -129,11 +139,18 @@ class AgentExecutor:
         input_tokens, output_tokens = self._summarize_tokens(call_back)
 
         # 6、返回最终的Agent运行结果以及token用量
-        return validated_result, input_tokens, output_tokens
+        return validated_result, input_tokens + jev_input_tokens, output_tokens + jev_output_tokens
 
 
     @staticmethod
     def _summarize_tokens(call_back: UsageMetadataCallbackHandler) -> tuple[int, int]:
+        '''
+        职责：
+        1. 计算输入输出token的用量
+        2. 返回输入输出token的用量
+        :param call_back: 回调处理器
+        :return: 输入输出token的用量
+        '''
 
         all_model_metadata: list[dict[str, Any]] = list(call_back.usage_metadata.values())
 
